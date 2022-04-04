@@ -5,7 +5,7 @@ const WebSocket = require('ws');
 const readline = require('readline-promise');
 const {stdin: input, stdout: output} = require('process');
 
-const rl = readline.default.createInterface({ input, output });
+const rl = readline.default.createInterface({input, output});
 
 const TEMPLATE_URL = "https://lukemiles49.github.io/site-test/assets/template.png";
 
@@ -44,7 +44,7 @@ const COLOR_MAPPINGS = {
 	'#FFFFFF': 31,
 };
 
-const PRIORITY = 4;
+const PRIORITY = 3;
 
 function componentToHex(c) {
 	const hex = c.toString(16).toUpperCase();
@@ -163,14 +163,31 @@ function getCanvasImageUrl(id, token) {
 	});
 }
 
-async function loadCanvas(token) {
+function getQuadrants(template) {
+	const quadrants = [];
+	for (let qy = 0; qy < 2; qy++) {
+		quadrant: for (let qx = 0; qx < 2; qx++) {
+			const offsetX = qx * 1000;
+			const offsetY = qy * 1000;
+			for (let y = 0; y < 1000; y++) {
+				for (let x = 0; x < 1000; x++) {
+					if (template.get(offsetX + x, offsetY + y, 3) > 0) {
+						quadrants.push({qx, qy});
+						continue quadrant;
+					}
+				}
+			}
+		}
+	}
+	return quadrants;
+}
+
+async function loadCanvas(quadrants, token) {
 	const canvas = ndarray(new Uint8ClampedArray(2000 * 2000 * 4), [2000, 2000, 4]);
-	for (const {name, offsetX, offsetY} of [
-		{name: '0', offsetX: 0, offsetY: 0},
-		{name: '1', offsetX: 1000, offsetY: 0},
-		{name: '2', offsetX: 0, offsetY: 1000},
-		{name: '3', offsetX: 1000, offsetY: 1000},
-	]) {
+	for (const {qx, qy} of quadrants) {
+		const name = `${qx + qy * 2}`;
+		const offsetX = qx * 1000;
+		const offsetY = qy * 1000;
 		const url = await getCanvasImageUrl(name, token);
 		const img = await loadImage(url);
 		const [width, height] = img.shape;
@@ -281,8 +298,9 @@ async function run() {
 		try {
 			console.log("Loading template...");
 			const template = await loadTemplate();
+			const quadrants = getQuadrants(template);
 			console.log("Loading canvas...");
-			const canvas = await loadCanvas(token);
+			const canvas = await loadCanvas(quadrants, token);
 			const work = getRemainingWork(template, canvas);
 			if (work.some(l => l.length) > 0) {
 				const placement = pickPlacement(work);
